@@ -1,26 +1,42 @@
-name: Deploy WAR
+name: Deploy WAR to WebLogic
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Deploy WAR locally
-        run: |
-          cp sample.war /home/oracle/
-          
-          sudo su - oracle -c '
-          cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
+      - name: Copy WAR to Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 192.168.182.166
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          source: sample.war
+          target: /home/oracle/
 
-          ./wlst.sh <<EOF
-          connect("weblogic","sachin@123","t3://localhost:7001")
-          deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
-          exit()
-          EOF
-          '
+      - name: Deploy to WebLogic
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 192.168.182.166
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            su - oracle -c '
+            source /home/oracle/.bash_profile
+            cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
+
+            ./wlst.sh <<EOF
+            connect("weblogic","sachin@123","t3://localhost:7001")
+            deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
+            exit()
+            EOF
+            '
+
