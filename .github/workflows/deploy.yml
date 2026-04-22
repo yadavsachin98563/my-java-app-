@@ -7,28 +7,22 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted   # IMPORTANT (your VM runner)
+    runs-on: self-hosted
 
     steps:
       # Step 1: Checkout code
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Step 2: Create deploy folder if not exists
-      - name: Prepare Deploy Directory
-        run: |
-          sudo mkdir -p /opt/deploy
-          sudo chown githubrunner:githubrunner /opt/deploy
-
-      # Step 3: Copy WAR to shared location
+      # Step 2: Copy WAR to shared folder
       - name: Copy WAR
         run: |
           cp sample.war /opt/deploy/
 
-      # Step 4: Deploy to WebLogic as oracle user
+      # Step 3: Deploy to WebLogic as oracle user
       - name: Deploy to WebLogic
         run: |
-          sudo su - oracle -c '
+          su - oracle -c '
           cp /opt/deploy/sample.war /home/oracle/sample.war
 
           cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
