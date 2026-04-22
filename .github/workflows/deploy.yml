@@ -7,36 +7,35 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted   # IMPORTANT (your VM runner)
 
     steps:
-      - name: Checkout Code
+      # Step 1: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Copy WAR to Server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 192.168.182.166
-          username: root
-          key: ${{ secrets.SSH_KEY }}
-          source: sample.war
-          target: /home/oracle/
+      # Step 2: Create deploy folder if not exists
+      - name: Prepare Deploy Directory
+        run: |
+          sudo mkdir -p /opt/deploy
+          sudo chown githubrunner:githubrunner /opt/deploy
 
+      # Step 3: Copy WAR to shared location
+      - name: Copy WAR
+        run: |
+          cp sample.war /opt/deploy/
+
+      # Step 4: Deploy to WebLogic as oracle user
       - name: Deploy to WebLogic
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 192.168.182.166
-          username: root
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            su - oracle -c '
-            source /home/oracle/.bash_profile
-            cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
+        run: |
+          sudo su - oracle -c '
+          cp /opt/deploy/sample.war /home/oracle/sample.war
 
-            ./wlst.sh <<EOF
-            connect("weblogic","sachin@123","t3://localhost:7001")
-            deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
-            exit()
-            EOF
-            '
+          cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
 
+          ./wlst.sh <<EOF
+          connect("weblogic","sachin@123","t3://localhost:7001")
+          deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
+          exit()
+          EOF
+          '
