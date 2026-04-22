@@ -2,8 +2,7 @@ name: Deploy WAR to WebLogic
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   deploy:
@@ -13,29 +12,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Copy WAR to Server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 192.168.182.166
-          username: root
-          key: ${{ secrets.SSH_KEY }}
-          source: sample.war
-          target: /home/oracle/
+      - name: Copy WAR
+        run: cp sample.war /home/oracle/
 
       - name: Deploy to WebLogic
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 192.168.182.166
-          username: root
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            su - oracle -c '
-            source /home/oracle/.bash_profile
-            cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
+        run: |
+          sudo su - oracle -c '
+          source /home/oracle/.bash_profile
+          cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
 
-            ./wlst.sh <<EOF
-            connect("weblogic","sachin@123","t3://localhost:7001")
-            deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
-            exit()
-            EOF
-            '
+          ./wlst.sh <<EOF
+          connect("weblogic","sachin@123","t3://localhost:7001")
+          deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
+          exit()
+          EOF
+          '
