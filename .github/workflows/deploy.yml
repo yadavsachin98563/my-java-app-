@@ -7,29 +7,35 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout code
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Copy WAR to shared folder
-      - name: Copy WAR
-        run: |
-          cp sample.war /opt/deploy/
+      - name: Copy WAR to Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 192.168.182.166
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          source: sample.war
+          target: /home/oracle/
 
-      # Step 3: Deploy to WebLogic as oracle user
       - name: Deploy to WebLogic
-        run: |
-          su - oracle -c '
-          cp /opt/deploy/sample.war /home/oracle/sample.war
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 192.168.182.166
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            su - oracle -c '
+            source /home/oracle/.bash_profile
+            cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
 
-          cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
-
-          ./wlst.sh <<EOF
-          connect("weblogic","sachin@123","t3://localhost:7001")
-          deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
-          exit()
-          EOF
-          '
+            ./wlst.sh <<EOF
+            connect("weblogic","sachin@123","t3://localhost:7001")
+            deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
+            exit()
+            EOF
+            '
