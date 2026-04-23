@@ -36,6 +36,7 @@ jobs:
 
             ./wlst.sh <<EOF
             connect("weblogic","sachin@123","t3://localhost:7001")
-            redeploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
+            deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
             exit()
             EOF
+            '
