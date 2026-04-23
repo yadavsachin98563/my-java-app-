@@ -7,14 +7,12 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on:   self-hosted
 
     steps:
-      # Checkout source code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Copy WAR file to WebLogic server
       - name: Copy WAR to Server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -24,8 +22,7 @@ jobs:
           source: sample.war
           target: /home/oracle/
 
-      # Redeploy existing manually deployed app = sample
-      - name: Redeploy to WebLogic
+      - name: Deploy to WebLogic
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 192.168.182.166
@@ -38,9 +35,7 @@ jobs:
 
             ./wlst.sh <<EOF
             connect("weblogic","sachin@123","t3://localhost:7001")
-
-            redeploy("sample","/home/oracle/sample.war")
-
+            deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
             exit()
             EOF
             '
