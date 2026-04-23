@@ -19,6 +19,7 @@ jobs:
         with:
           host: 192.168.182.166
           username: root
+          key: ${{ secrets.SSH_KEY }}
           source: sample.war
           target: /home/oracle/
 
