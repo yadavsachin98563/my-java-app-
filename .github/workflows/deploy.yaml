@@ -1,4 +1,4 @@
-name: Fast CI-CD WebLogic WAR Deployment
+name: CI-CD WebLogic Pipeline
 
 on:
   push:
@@ -10,32 +10,48 @@ env:
   VERSION: v1.${{ github.run_number }}
   NEXUS_URL: http://192.168.182.166:8081
   NEXUS_REPO: raw-hosted
+  WL_URL: t3://192.168.182.166:7001
+  APP_URL: http://192.168.182.166:7001/sample
 
 jobs:
 
-# ==========================================
-# CI JOB (FAST UPLOAD)
-# ==========================================
-  upload:
-    name: Upload WAR to Nexus
+# ===================================
+# CI JOB (master-node)
+# ===================================
+  build:
+    name: Build WAR and Upload to Nexus
     runs-on: [self-hosted, ci-server]
 
     steps:
-      - name: Checkout Repository
+
+      - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Upload WAR Directly
+      - name: Verify Java
+        run: java -version
+
+      - name: Verify Maven
+        run: mvn -version
+
+      - name: Build WAR
+        run: mvn clean package -DskipTests
+
+      - name: Rename WAR
+        run: cp target/*.war $APP_NAME.war
+
+      - name: Upload to Nexus
         run: |
           curl -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
-          --upload-file sample.war \
-          $NEXUS_URL/repository/$NEXUS_REPO/$APP_NAME.war
+          --upload-file $APP_NAME.war \
+          $NEXUS_URL/repository/$NEXUS_REPO/$APP_NAME-$VERSION.war
 
-# ==========================================
-# CD JOB (FAST DEPLOY)
-# ==========================================
+
+# ===================================
+# CD JOB (worker-node)
+# ===================================
   deploy:
-    name: Deploy to WebLogic
-    needs: upload
+    name: Deploy WAR to WebLogic
+    needs: build
     runs-on: [self-hosted, cd-server]
 
     steps:
@@ -44,15 +60,27 @@ jobs:
         run: |
           curl -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
           -o app.war \
-          $NEXUS_URL/repository/$NEXUS_REPO/$APP_NAME.war
+          $NEXUS_URL/repository/$NEXUS_REPO/$APP_NAME-$VERSION.war
 
-      - name: Redeploy Application
+      - name: Undeploy Old App
         run: |
           java weblogic.Deployer \
-          -adminurl t3://192.168.182.166:7001 \
+          -adminurl $WL_URL \
           -username ${{ secrets.WL_USER }} \
           -password ${{ secrets.WL_PASS }} \
-          -redeploy \
+          -undeploy \
+          -name sample || true
+
+      - name: Deploy New WAR
+        run: |
+          java weblogic.Deployer \
+          -adminurl $WL_URL \
+          -username ${{ secrets.WL_USER }} \
+          -password ${{ secrets.WL_PASS }} \
+          -deploy \
           -name sample \
           -source app.war \
           -targets AdminServer
+
+      - name: Verify Deployment
+        run: curl -I $APP_URL || true
