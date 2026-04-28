@@ -9,6 +9,7 @@ env:
   APP_NAME: sample
   NEXUS_URL: http://192.168.182.166:8081
   NEXUS_REPO: raw-hosted
+
   WORKER_IP: 192.168.182.168
   DEPLOY_PATH: /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
 
