@@ -1,41 +1,57 @@
-name: Deploy WAR to WebLogic
+name: CI-CD WebLogic Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+
+env:
+  APP_NAME: sample
+  VERSION: v1.${{ github.run_number }}
+  NEXUS_URL: http://nexus.local:8081
+  NEXUS_REPO: maven-releases
 
 jobs:
-  deploy:
-    runs-on:   self-hosted
+  build:
+    runs-on: [self-hosted, ci-server]
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Copy WAR to Server
-        uses: appleboy/scp-action@v0.1.7
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          host: 192.168.182.166
-          username: root
-          key: ${{ secrets.SSH_KEY }}
-          source: sample.war
-          target: /home/oracle/
+          distribution: temurin
+          java-version: 17
+
+      - name: Build WAR
+        run: mvn clean package
+
+      - name: Upload WAR to Nexus
+        run: |
+          cp target/*.war sample.war
+          curl -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
+          --upload-file sample.war \
+          $NEXUS_URL/repository/$NEXUS_REPO/sample.war
+
+  deploy:
+    needs: build
+    runs-on: [self-hosted, cd-server]
+
+    steps:
+      - name: Download WAR
+        run: |
+          curl -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
+          -o sample.war \
+          $NEXUS_URL/repository/$NEXUS_REPO/sample.war
 
       - name: Deploy to WebLogic
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 192.168.182.166
-          username: root
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            su - oracle -c '
-            source /home/oracle/.bash_profile
-            cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
-
-            ./wlst.sh <<EOF
-            connect("weblogic","sachin@123","t3://localhost:7001")
-            deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
-            exit()
-            EOF
-            '
+        run: |
+          java weblogic.Deployer \
+          -adminurl t3://weblogic-admin:7001 \
+          -username ${{ secrets.WL_USER }} \
+          -password ${{ secrets.WL_PASS }} \
+          -redeploy \
+          -name sampleApp \
+          -source sample.war \
+          -targets AdminServer
