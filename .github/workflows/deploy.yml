@@ -1,4 +1,4 @@
-name: Fast WAR Deploy Pipeline
+name: Fast WAR Nexus + WebLogic Deploy
 
 on:
   push:
@@ -13,40 +13,40 @@ env:
   DEPLOY_PATH: /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
 
 jobs:
-
   deploy:
-    name: Fast Deploy WAR
+    name: Push WAR to Nexus and Deploy
     runs-on: [self-hosted, ci-server]
 
     steps:
 
-      # =====================
-      # 1. Checkout
-      # =====================
-      - name: Checkout Code
+      # Fast checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: true
 
-      # =====================
-      # 2. Upload to Nexus (FAST)
-      # =====================
-      - name: Push WAR to Nexus
+      # Verify WAR file exists
+      - name: Check WAR File
+        run: ls -lh sample.war
+
+      # Upload WAR to Nexus
+      - name: Upload WAR to Nexus
         run: |
           curl -s -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
           --upload-file sample.war \
           $NEXUS_URL/repository/$NEXUS_REPO/sample.war
 
-      # =====================
-      # 3. Copy to WebLogic (FAST SCP)
-      # =====================
-      - name: Deploy to WebLogic Server
+      # Copy WAR to WebLogic worker node
+      - name: Deploy WAR to Worker Node
         run: |
           scp -o StrictHostKeyChecking=no \
           sample.war \
           oracle@$WORKER_IP:$DEPLOY_PATH
 
-      # =====================
-      # 4. Quick Verify
-      # =====================
+      # Verify deployed file
       - name: Verify Deployment
         run: |
-          ssh oracle@$WORKER_IP "ls -lh $DEPLOY_PATH/sample.war"
+          ssh -o StrictHostKeyChecking=no \
+          oracle@$WORKER_IP \
+          "ls -lh $DEPLOY_PATH/sample.war"
