@@ -1,4 +1,4 @@
-name: Direct WAR Deploy Pipeline
+name: Fast WAR Deploy Pipeline
 
 on:
   push:
@@ -9,52 +9,44 @@ env:
   APP_NAME: sample
   NEXUS_URL: http://192.168.182.166:8081
   NEXUS_REPO: raw-hosted
-
   WORKER_IP: 192.168.182.168
   DEPLOY_PATH: /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
 
 jobs:
 
   deploy:
-    name: Get WAR from GitHub Push Nexus Deploy WebLogic
+    name: Fast Deploy WAR
     runs-on: [self-hosted, ci-server]
 
     steps:
 
-      - name: Checkout Repository
+      # =====================
+      # 1. Checkout
+      # =====================
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Verify WAR Exists
-        run: ls -lh sample.war
-
-      - name: Upload WAR to Nexus
+      # =====================
+      # 2. Upload to Nexus (FAST)
+      # =====================
+      - name: Push WAR to Nexus
         run: |
-          curl -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
+          curl -s -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
           --upload-file sample.war \
           $NEXUS_URL/repository/$NEXUS_REPO/sample.war
 
-      - name: Install sshpass
+      # =====================
+      # 3. Copy to WebLogic (FAST SCP)
+      # =====================
+      - name: Deploy to WebLogic Server
         run: |
-          sudo yum install -y sshpass || \
-          sudo dnf install -y sshpass || \
-          sudo apt-get update && sudo apt-get install -y sshpass
-
-      - name: Copy WAR to Worker Node WebLogic
-        run: |
-          sshpass -p "${{ secrets.WORKER_PASS }}" \
           scp -o StrictHostKeyChecking=no \
           sample.war \
           oracle@$WORKER_IP:$DEPLOY_PATH
 
-      - name: Verify WAR on Worker Node
+      # =====================
+      # 4. Quick Verify
+      # =====================
+      - name: Verify Deployment
         run: |
-          sshpass -p "${{ secrets.WORKER_PASS }}" \
-          ssh -o StrictHostKeyChecking=no \
-          oracle@$WORKER_IP \
-          "ls -lh $DEPLOY_PATH"
-
-      - name: Verify WAR in Nexus
-        run: |
-          curl -I -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
-          $NEXUS_URL/repository/$NEXUS_REPO/sample.war
-          
+          ssh oracle@$WORKER_IP "ls -lh $DEPLOY_PATH/sample.war"
