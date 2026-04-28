@@ -8,79 +8,75 @@ on:
 env:
   APP_NAME: sample
   VERSION: v1.${{ github.run_number }}
-  NEXUS_URL: http://192.168.182.166:8081
-  NEXUS_REPO: raw-hosted
-  WL_URL: t3://192.168.182.166:7001
-  APP_URL: http://192.168.182.166:7001/sample
+  NEXUS_URL: http://nexus.local:8081
+  NEXUS_REPO: maven-releases
 
 jobs:
 
-# ===================================
-# CI JOB (master-node)
-# ===================================
+# ==========================
+# CI JOB (BUILD + NEXUS PUSH)
+# ==========================
   build:
-    name: Build WAR and Upload to Nexus
+    name: Build WAR and Push to Nexus
     runs-on: [self-hosted, ci-server]
 
     steps:
 
-      - name: Checkout Source
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Verify Java
-        run: java -version
+	      - name: Set Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-      - name: Verify Maven
-        run: mvn -version
-
-      - name: Build WAR
-        run: mvn clean package -DskipTests
+      - name: Build WAR using Maven
+        run: mvn clean package
 
       - name: Rename WAR
-        run: cp target/*.war $APP_NAME.war
+        run: |
+          cp target/*.war $APP_NAME.war
 
-      - name: Upload to Nexus
+      - name: Upload WAR to Nexus
         run: |
           curl -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
           --upload-file $APP_NAME.war \
-          $NEXUS_URL/repository/$NEXUS_REPO/$APP_NAME-$VERSION.war
+          "$NEXUS_URL/repository/$NEXUS_REPO/$APP_NAME-$VERSION.war"
 
 
-# ===================================
-# CD JOB (worker-node)
-# ===================================
+# ==========================
+# CD JOB (WEBLOGIC DEPLOY)
+# ==========================
   deploy:
-    name: Deploy WAR to WebLogic
+    name: Deploy to WebLogic (No Internet Server)
     needs: build
     runs-on: [self-hosted, cd-server]
 
     steps:
 
-      - name: Download WAR
+      - name: Download WAR from Nexus
         run: |
           curl -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
           -o app.war \
-          $NEXUS_URL/repository/$NEXUS_REPO/$APP_NAME-$VERSION.war
+          "$NEXUS_URL/repository/$NEXUS_REPO/$APP_NAME-$VERSION.war"
 
-      - name: Undeploy Old App
+      - name: Stop Existing App (optional)
         run: |
           java weblogic.Deployer \
-          -adminurl $WL_URL \
-          -username ${{ secrets.WL_USER }} \
+          -adminurl t3://weblogic-admin:7001 \
+          -username admin \
           -password ${{ secrets.WL_PASS }} \
           -undeploy \
-          -name sample || true
+          -name sampleApp || true
 
       - name: Deploy New WAR
         run: |
           java weblogic.Deployer \
-          -adminurl $WL_URL \
-          -username ${{ secrets.WL_USER }} \
+          -adminurl t3://weblogic-admin:7001 \
+          -username admin \
           -password ${{ secrets.WL_PASS }} \
           -deploy \
-          -name sample \
+          -name sampleApp \
           -source app.war \
           -targets AdminServer
-
-      - name: Verify Deployment
-        run: curl -I $APP_URL || true
