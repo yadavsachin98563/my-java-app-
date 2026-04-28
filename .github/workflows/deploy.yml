@@ -1,0 +1,40 @@
+name: Fast Nexus to WebLogic Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+env:
+  NEXUS_URL: http://192.168.182.166:8081
+  NEXUS_REPO: raw-hosted
+  WAR_FILE: sample.war
+  WORKER_IP: 192.168.182.168
+  DEPLOY_PATH: /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, ci-server]
+
+    steps:
+      - name: Download WAR from Nexus
+        run: |
+          curl -s -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
+          -o sample.war \
+          $NEXUS_URL/repository/$NEXUS_REPO/$WAR_FILE
+
+      - name: Verify Download
+        run: ls -lh sample.war
+
+      - name: Copy to Worker Node
+        run: |
+          scp -o StrictHostKeyChecking=no \
+          sample.war \
+          oracle@$WORKER_IP:$DEPLOY_PATH
+
+      - name: Verify on Worker
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+          oracle@$WORKER_IP \
+          "ls -lh $DEPLOY_PATH/sample.war"
