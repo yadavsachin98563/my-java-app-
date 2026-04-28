@@ -1,10 +1,10 @@
 name: Fast Nexus to WebLogic Deploy
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 env:
   NEXUS_URL: http://192.168.182.166:8081
@@ -15,25 +15,32 @@ env:
 
 jobs:
   deploy:
+    name: Download from Nexus and Deploy
     runs-on: [self-hosted, ci-server]
 
     steps:
+
+      # Download WAR from Nexus (fast with timeout)
       - name: Download WAR from Nexus
         run: |
-          curl -s -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
+          curl --connect-timeout 5 --max-time 30 -s \
+          -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
           -o sample.war \
           $NEXUS_URL/repository/$NEXUS_REPO/$WAR_FILE
 
-      - name: Verify Download
+      # Verify file downloaded
+      - name: Verify WAR File
         run: ls -lh sample.war
 
-      - name: Copy to Worker Node
+      # Copy WAR to WebLogic server
+      - name: Copy WAR to Worker Node
         run: |
           scp -o StrictHostKeyChecking=no \
           sample.war \
           oracle@$WORKER_IP:$DEPLOY_PATH
 
-      - name: Verify on Worker
+      # Verify on target server
+      - name: Verify Deployment
         run: |
           ssh -o StrictHostKeyChecking=no \
           oracle@$WORKER_IP \
