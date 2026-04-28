@@ -1,4 +1,4 @@
-name: CI-CD WebLogic Pipeline
+name: Fresh CI-CD WebLogic Setup
 
 on:
   push:
@@ -7,20 +7,19 @@ on:
 
 env:
   APP_NAME: sample
-  VERSION: v1.${{ github.run_number }}
-  NEXUS_URL: http://192..168.182.166:8081
-  NEXUS_REPO: maven-releases
+  NEXUS_URL: http://192.168.182.166:8081
+  NEXUS_REPO: raw-hosted
+  WORKER_IP: 192.168.182.168
+  DEPLOY_PATH: /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
 
 jobs:
 
-# ==================================
-# CI JOB (BUILD + PUSH TO NEXUS)
-# ==================================
-  build:
-    name: Build WAR and Push to Nexus
+  deploy:
+    name: Build WAR Push Nexus Deploy WebLogic
     runs-on: [self-hosted, ci-server]
 
     steps:
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -30,8 +29,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Build WAR
-        run: mvn clean package
+      - name: Verify Maven
+        run: mvn -version
+
+      - name: Build WAR File
+        run: mvn clean package -DskipTests
 
       - name: Rename WAR
         run: cp target/*.war sample.war
@@ -42,19 +44,27 @@ jobs:
           --upload-file sample.war \
           $NEXUS_URL/repository/$NEXUS_REPO/sample.war
 
-# ==================================
-# CD JOB REMOVED
-# DEPLOY USING SCP FROM CI SERVER
-# ==================================
-
-      - name: Copy WAR to WebLogic Worker
+      - name: Install sshpass
         run: |
-          sshpass -p "${{ secrets.WORKER_PASS }}" scp -o StrictHostKeyChecking=no \
+          sudo yum install -y sshpass || \
+          sudo dnf install -y sshpass || \
+          sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Copy WAR to WebLogic Server
+        run: |
+          sshpass -p "${{ secrets.WORKER_PASS }}" \
+          scp -o StrictHostKeyChecking=no \
           sample.war \
-          root@192.168.182.168:/home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
+          oracle@$WORKER_IP:$DEPLOY_PATH
 
-      - name: Verify File on Worker Server
+      - name: Verify File on WebLogic Server
         run: |
-          sshpass -p "${{ secrets.WORKER_PASS }}" ssh -o StrictHostKeyChecking=no \
-          oracle@192.168.182.168 \
-          "ls -lh /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/"
+          sshpass -p "${{ secrets.WORKER_PASS }}" \
+          ssh -o StrictHostKeyChecking=no \
+          oracle@$WORKER_IP \
+          "ls -lh $DEPLOY_PATH"
+
+      - name: Verify WAR in Nexus
+        run: |
+          curl -I -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
+          $NEXUS_URL/repository/$NEXUS_REPO/sample.war
