@@ -1,4 +1,4 @@
-name: Fresh CI-CD WebLogic Setup
+name: Direct WAR Deploy Pipeline
 
 on:
   push:
@@ -15,28 +15,16 @@ env:
 jobs:
 
   deploy:
-    name: Build WAR Push Nexus Deploy WebLogic
+    name: Get WAR from GitHub Push Nexus Deploy WebLogic
     runs-on: [self-hosted, ci-server]
 
     steps:
 
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Verify Maven
-        run: mvn -version
-
-      - name: Build WAR File
-        run: mvn clean package -DskipTests
-
-      - name: Rename WAR
-        run: cp target/*.war sample.war
+      - name: Verify WAR Exists
+        run: ls -lh sample.war
 
       - name: Upload WAR to Nexus
         run: |
@@ -50,14 +38,14 @@ jobs:
           sudo dnf install -y sshpass || \
           sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Copy WAR to WebLogic Server
+      - name: Copy WAR to Worker Node WebLogic
         run: |
           sshpass -p "${{ secrets.WORKER_PASS }}" \
           scp -o StrictHostKeyChecking=no \
           sample.war \
           oracle@$WORKER_IP:$DEPLOY_PATH
 
-      - name: Verify File on WebLogic Server
+      - name: Verify WAR on Worker Node
         run: |
           sshpass -p "${{ secrets.WORKER_PASS }}" \
           ssh -o StrictHostKeyChecking=no \
@@ -68,3 +56,4 @@ jobs:
         run: |
           curl -I -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
           $NEXUS_URL/repository/$NEXUS_REPO/sample.war
+          
