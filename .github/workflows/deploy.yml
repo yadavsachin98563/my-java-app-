@@ -1,47 +1,70 @@
-name: Fast Nexus to WebLogic Deploy
+name: Direct WAR Deploy Pipeline
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 env:
+  APP_NAME: sample
   NEXUS_URL: http://192.168.182.166:8081
   NEXUS_REPO: raw-hosted
-  WAR_FILE: sample.war
   WORKER_IP: 192.168.182.168
-  DEPLOY_PATH: /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
+  DEPLOY_PATH: /home/oracle/
 
 jobs:
   deploy:
-    name: Download from Nexus and Deploy
+    name: Push Nexus + SCP + WebLogic Deploy
     runs-on: [self-hosted, ci-server]
 
     steps:
 
-      # Download WAR from Nexus (fast with timeout)
-      - name: Download WAR from Nexus
-        run: |
-          curl --connect-timeout 5 --max-time 30 -s \
-          -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
-          -o sample.war \
-          $NEXUS_URL/repository/$NEXUS_REPO/$WAR_FILE
+      # Checkout code from GitHub
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      # Verify file downloaded
+      # Verify WAR exists
       - name: Verify WAR File
         run: ls -lh sample.war
 
-      # Copy WAR to WebLogic server
+      # Upload WAR to Nexus
+      - name: Upload WAR to Nexus
+        run: |
+          curl --fail -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
+          --upload-file sample.war \
+          $NEXUS_URL/repository/$NEXUS_REPO/sample.war
+
+      # Setup SSH Key
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $WORKER_IP >> ~/.ssh/known_hosts
+
+      # Copy WAR to worker-node
       - name: Copy WAR to Worker Node
         run: |
-          scp -o StrictHostKeyChecking=no \
-          sample.war \
-          oracle@$WORKER_IP:$DEPLOY_PATH
+          scp sample.war oracle@$WORKER_IP:$DEPLOY_PATH
 
-      # Verify on target server
-      - name: Verify Deployment
+      # Deploy WAR in WebLogic on worker-node
+      - name: Deploy to WebLogic
         run: |
-          ssh -o StrictHostKeyChecking=no \
-          oracle@$WORKER_IP \
-          "ls -lh $DEPLOY_PATH/sample.war"
+          ssh oracle@$WORKER_IP << 'EOF'
+          source /home/oracle/.bash_profile
+          cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
+
+          ./wlst.sh <<EOT
+          connect("weblogic","sachin@123","t3://localhost:7001")
+          deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
+          exit()
+          EOT
+          EOF
+
+      # Verify Nexus Upload
+      - name: Verify WAR in Nexus
+        run: |
+          curl -I -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
+          $NEXUS_URL/repository/$NEXUS_REPO/sample.war
