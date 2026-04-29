@@ -1,4 +1,4 @@
-name: Deploy WAR from GitHub to WebLogic Worker
+name: Deploy WAR from Nexus to WebLogic Worker
 
 on:
   push:
@@ -7,23 +7,28 @@ on:
   workflow_dispatch:
 
 env:
+  NEXUS_URL: http://192.168.182.166:8081
+  NEXUS_REPO: raw-hosted
+  WAR_FILE: sample.war
+
   WORKER_IP: 192.168.182.168
   DEPLOY_PATH: /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
 
 jobs:
   deploy:
-    name: GitHub WAR to Worker Deploy
+    name: Nexus WAR to Worker Deploy
     runs-on: [self-hosted, ci-server]
 
     steps:
 
-      # Get latest repo files from GitHub
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+      # Download WAR from Nexus
+      - name: Download WAR from Nexus
+        run: |
+          curl --fail -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
+          -o sample.war \
+          $NEXUS_URL/repository/$NEXUS_REPO/$WAR_FILE
 
-      # Verify WAR file exists in repo
+      # Verify downloaded file
       - name: Verify WAR File
         run: ls -lh sample.war
 
@@ -35,12 +40,12 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $WORKER_IP >> ~/.ssh/known_hosts
 
-      # Copy WAR to WebLogic worker node
+      # Copy WAR to worker node
       - name: Deploy WAR to Worker Node
         run: |
           scp sample.war root@$WORKER_IP:$DEPLOY_PATH
 
-      # Verify file copied
+      # Verify copied file
       - name: Verify Deployment
         run: |
           ssh root@$WORKER_IP \
