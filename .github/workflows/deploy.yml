@@ -1,41 +1,47 @@
-name: Deploy WAR to WebLogic
+name: Deploy WAR from GitHub to WebLogic Worker
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+env:
+  WORKER_IP: 192.168.182.168
+  DEPLOY_PATH: /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
 
 jobs:
   deploy:
-    runs-on:   self-hosted
+    name: GitHub WAR to Worker Deploy
+    runs-on: [self-hosted, ci-server]
 
     steps:
-      - name: Checkout Code
+
+      # Get latest repo files from GitHub
+      - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Copy WAR to Server
-        uses: appleboy/scp-action@v0.1.7
         with:
-          host: 192.168.182.166
-          username: root
-          key: ${{ secrets.SSH_KEY }}
-          source: sample.war
-          target: /home/oracle/
+          fetch-depth: 1
 
-      - name: Deploy to WebLogic
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 192.168.182.166
-          username: root
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            su - oracle -c '
-            source /home/oracle/.bash_profile
-            cd /home/oracle/WLS/Oracle/Middleware/Oracle_Home/oracle_common/common/bin
+      # Verify WAR file exists in repo
+      - name: Verify WAR File
+        run: ls -lh sample.war
 
-            ./wlst.sh <<EOF
-            connect("weblogic","sachin@123","t3://localhost:7001")
-            deploy("sampleapp","/home/oracle/sample.war",targets="AdminServer")
-            exit()
-            EOF
-            '
+      # Configure SSH key
+      - name: Setup SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $WORKER_IP >> ~/.ssh/known_hosts
+
+      # Copy WAR to WebLogic worker node
+      - name: Deploy WAR to Worker Node
+        run: |
+          scp sample.war root@$WORKER_IP:$DEPLOY_PATH
+
+      # Verify file copied
+      - name: Verify Deployment
+        run: |
+          ssh root@$WORKER_IP \
+          "ls -lh $DEPLOY_PATH/sample.war"
