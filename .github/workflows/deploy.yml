@@ -38,10 +38,10 @@ jobs:
       # Copy WAR to WebLogic worker node
       - name: Deploy WAR to Worker Node
         run: |
-          scp sample.war oracle@$WORKER_IP:$DEPLOY_PATH
+          scp sample.war root@$WORKER_IP:$DEPLOY_PATH
 
       # Verify file copied
       - name: Verify Deployment
         run: |
-          ssh oracle@$WORKER_IP \
+          ssh root@$WORKER_IP \
           "ls -lh $DEPLOY_PATH/sample.war"
