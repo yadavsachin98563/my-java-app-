@@ -1,52 +1,37 @@
-name: Deploy WAR from Nexus to WebLogic Worker
+name: Nexus WAR Deploy
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
-  
+
 env:
   NEXUS_URL: http://192.168.182.166:8081
   NEXUS_REPO: raw-hosted
   WAR_FILE: sample.war
-
   WORKER_IP: 192.168.182.168
   DEPLOY_PATH: /home/oracle/WLS/Oracle/Middleware/Oracle_Home/user_projects/domains/mit/autodeploy/
 
 jobs:
   deploy:
-    name: Nexus WAR to Worker Deploy
     runs-on: [self-hosted, ci-server]
 
     steps:
-
-      # Download WAR from Nexus
       - name: Download WAR from Nexus
         run: |
           curl --fail -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }} \
           -o sample.war \
           $NEXUS_URL/repository/$NEXUS_REPO/$WAR_FILE
 
-      # Verify downloaded file
-      - name: Verify WAR File
-        run: ls -lh sample.war
-
-      # Configure SSH key
-      - name: Setup SSH Access
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $WORKER_IP >> ~/.ssh/known_hosts
 
-      # Copy WAR to worker node
-      - name: Deploy WAR to Worker Node
+      - name: Copy WAR
         run: |
           scp sample.war root@$WORKER_IP:$DEPLOY_PATH
 
-      # Verify copied file
-      - name: Verify Deployment
+      - name: Verify
         run: |
-          ssh root@$WORKER_IP \
-          "ls -lh $DEPLOY_PATH/sample.war"
+          ssh root@$WORKER_IP "ls -lh $DEPLOY_PATH/sample.war"
