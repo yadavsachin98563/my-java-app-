@@ -5,7 +5,7 @@ on:
     branches:
       - main
   workflow_dispatch:
-
+  
 env:
   NEXUS_URL: http://192.168.182.166:8081
   NEXUS_REPO: raw-hosted
