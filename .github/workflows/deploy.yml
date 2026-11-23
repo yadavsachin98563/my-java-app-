@@ -3,7 +3,7 @@ name: Deploy WAR from GitHub to WebLogic Worker
 on:
   push:
     branches:
-      - dev
+      - Main
   workflow_dispatch:
 
 env:
